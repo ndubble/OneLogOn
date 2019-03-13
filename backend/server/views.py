@@ -30,12 +30,13 @@ from backend.server.serializers import CheckInVisitReasonSerializer
 from backend.server.serializers import UserCompanySerializer
 from django.core import serializers
 from django.http import HttpResponse
+from django.http import JsonResponse
 from datetime import datetime
 from django.utils.timezone import now
 from django.utils.timezone import is_aware
+from pytz import timezone
 from datetime import date
 import pytz
-from django.http import JsonResponse
 
 
 def index(request):
@@ -107,16 +108,14 @@ class CompanyMessageView(APIView):
             message = {'error' : 'user is not logged in'}
             return Response(message, status=status.HTTP_400_BAD_REQUEST)
 
-
-
 class CheckInsListView(generics.ListAPIView):
     queryset = CheckIns.objects.all()
     serializer_class = CheckInsSerializer
 
     def get(self, request, format = 'json'):
         # find var in the query, else get the second param
-        start_time = request.GET.get('start_time',None)
-        end_time =  request.GET.get('end_time',None)
+        start_time = request.query_params.get('start_time')
+        end_time = request.query_params.get('end_time')
 
         if not start_time:
             return Response({'Start time' : 'invalid'}, status = status.HTTP_400_BAD_REQUEST)
@@ -124,28 +123,25 @@ class CheckInsListView(generics.ListAPIView):
         if not end_time:
             return Response({'End time' : 'invalid'}, status = status.HTTP_400_BAD_REQUEST)
 
-        tz = pytz.utc
-
-        start_time = tz.localize(datetime.strptime(start_time, '%m/%d/%Y'))#.date()
-        end_time   = tz.localize(datetime.strptime(end_time,   '%m/%d/%Y'))#.date()
-
-        # swap if start time is bigger
-        if start_time > end_time:
-            start_time, end_time = end_time, start_time
+        california_tz = pytz.timezone('US/Pacific')
+        start_time = california_tz.localize(datetime.strptime(start_time, '%m/%d/%Y'))
+        end_time   = california_tz.localize(datetime.strptime(end_time,   '%m/%d/%Y'))
 
         # get all CheckIns
-        c = CheckIns.objects.all()
+        c = CheckIns.objects.all().select_related('visitor').order_by('-check_in')
 
         # filter for dates,
         # check_in greater than or equal to start time
         # check_in less than or equal to end time (may use lt for less than)
         c = c.filter(check_in__gte = start_time, check_in__lte = end_time)
 
-        # may need to filter by company :: TO DO
+        # Filter by company
+        company_id = UserCompany.objects.get(user_id=request.user.id).company_id
+        c = c.filter(visitor__company=company_id)
 
         # format as JSON and send it back
         # this returns an array of json values per checkin -- probably what we wont
-        data = list(c.values())
+        data = list(c.values('visitor_id', 'check_in', 'check_out', 'visitor__visitor_id', 'visitor__first_name', 'visitor__last_name', 'visitor__is_employee', 'visitor__waiver_signed'))
         return JsonResponse(data, safe=False)
 
         # this returns an array of objects, that have stuff like primary keys in them and stuff like that -- probably what we dont want
@@ -192,9 +188,18 @@ class VisitorsDetailView(generics.RetrieveAPIView):
             visitor['is_checked_in'] = False
             visitor['check_in_id'] = False
         else:
-            visitor['is_checked_in'] = lastCheckIn.check_in.date() == now().today().date()
+            visitor['is_checked_in'] = lastCheckIn.check_in.astimezone(timezone('US/Pacific')).date() == now().today().date()
             visitor['check_in_id'] = lastCheckIn.id
         return JsonResponse(visitor)
+class VisitorsCreateView(generics.CreateAPIView):
+    queryset = Visitors.objects.all()
+    serializer_class = VisitorsSerializer
+    def post(self, request, *args, **kwargs):
+        request.data['company'] = UserCompany.objects.get(user_id=request.user.id).company_id
+        return self.create(request, *args, **kwargs)
+class VisitorsUpdateView(generics.UpdateAPIView):
+    queryset = Visitors.objects.all()
+    serializer_class = VisitorsSerializer
 class VisitorsUpdateWaiverView(generics.UpdateAPIView):
     """
     /api/visitors/<pk>/waiver/
@@ -217,26 +222,32 @@ class VisitorsUpdateWaiverView(generics.UpdateAPIView):
             return Response(status=status.HTTP_200_OK)
         except Exception: 
             message = {'error' : 'Visitor doesn\'t exist'}
-            return Response(message, status=status.HTTP_400_BAD_REQUEST)         
-class VisitorsCreateView(generics.CreateAPIView):
-    queryset = Visitors.objects.all()
-    serializer_class = VisitorsSerializer
-    def post(self, request, *args, **kwargs):
-        request.data['company'] = UserCompany.objects.get(user_id=request.user.id).company_id
-        return self.create(request, *args, **kwargs)
-class VisitorsUpdateView(generics.UpdateAPIView):
-    queryset = Visitors.objects.all()
-    serializer_class = VisitorsSerializer
+            return Response(message, status=status.HTTP_400_BAD_REQUEST)
 
 class VisitReasonListView(generics.ListAPIView):
     queryset = VisitReason.objects.all()
     serializer_class = VisitReasonSerializer
+    def get(self, request, *args, **kwargs):
+        company_id = UserCompany.objects.get(user_id=request.user.id).company_id
+        reasons = VisitReason.objects.filter(company=company_id)
+        data = list(reasons.values())
+        return JsonResponse(data, safe=False)
 class VisitReasonDetailView(generics.RetrieveAPIView):
     queryset = VisitReason.objects.all()
     serializer_class = VisitReasonSerializer
 class VisitReasonCreateView(generics.CreateAPIView):
     queryset = VisitReason.objects.all()
     serializer_class = VisitReasonSerializer
+    def post(self, request, *args, **kwargs):
+        request.data['company'] = UserCompany.objects.get(user_id=request.user.id).company_id
+        return self.create(request, *args, **kwargs)
+class VisitReasonUpdateView(generics.UpdateAPIView):
+    queryset = VisitReason.objects.all()
+    serializer_class = VisitReasonSerializer
+class VisitReasonDestroyView(generics.DestroyAPIView):
+    queryset = VisitReason.objects.all()
+    serializer_class = VisitReasonSerializer
+
 class CheckInVisitReasonListView(generics.ListAPIView):
     queryset = CheckInVisitReason.objects.all()
     serializer_class = CheckInVisitReasonSerializer
@@ -246,6 +257,16 @@ class CheckInVisitReasonDetailView(generics.RetrieveAPIView):
 class CheckInVisitReasonCreateView(generics.CreateAPIView):
     queryset = CheckInVisitReason.objects.all()
     serializer_class = CheckInVisitReasonSerializer
+    def create(self, request, *args, **kwargs):
+        is_many = isinstance(request.data, list)
+        if not is_many:
+            return super(CheckInVisitReasonCreateView, self).create(request, *args, **kwargs)
+        else:
+            serializer = self.get_serializer(data=request.data, many=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 class UserCreate(APIView):
     permission_classes = []
@@ -263,8 +284,7 @@ class Registration(APIView):
     """
     /api/register
     Register new User and new Company.
-    Required Parameters: username, email, password, company_name,
-        company_address, company_city, company_zip, company_state
+    Required Parameters: username, email, password, company_name
     """
     permission_classes = (AllowAny,)
     def post(self, request, format='json'):

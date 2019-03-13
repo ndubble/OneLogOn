@@ -191,19 +191,20 @@ class Kiosk extends Component {
 
   determineNextPage = () => {
     const { page, visitorId, reasons, isCheckedIn, selected, waiverSigned, error } = this.state;
+    const hasReasons = Array.isArray(reasons) && reasons.length;
     let nextPage = page;
     switch (page) {
       case CHECK_IN_PAGE:
         if (visitorId && isCheckedIn) {
           nextPage = FINISH_PAGE;
           break;
-        } else if (visitorId && !isCheckedIn && reasons) {
+        } else if (visitorId && !isCheckedIn && hasReasons) {
           nextPage = REASONS_PAGE;
           break;
-        } else if (visitorId && !isCheckedIn && !reasons && !waiverSigned) {
+        } else if (visitorId && !isCheckedIn && !hasReasons && !waiverSigned) {
           nextPage = WAIVER_PAGE;
           break;
-        } else if (visitorId && !isCheckedIn && !reasons && waiverSigned) {
+        } else if (visitorId && !isCheckedIn && !hasReasons && waiverSigned) {
           nextPage = FINISH_PAGE;
           break;
         }
@@ -225,9 +226,13 @@ class Kiosk extends Component {
         nextPage = (page + 1) % PAGES.length;
         break;
     }
-    this.setState({
-      page: nextPage,
-    });
+    if (nextPage === CHECK_IN_PAGE) {
+      this.cancel(); // reset all inputs
+    } else {
+      this.setState({
+        page: nextPage,
+      });
+    }
   };
 
   checkIn = async () => {
@@ -241,6 +246,20 @@ class Kiosk extends Component {
           check_in: new Date(),
         },
       });
+
+      const { reasons } = this.state;
+      if (reasons && reasons.length) {
+        let checkInVisitReasons = reasons.map(reason => {
+          return {
+            check_in: checkInResp.id,
+            visit_reason: reason.id,
+          };
+        });
+        const checkInVisitReasonsResp = await myFetch('/api/checkinvisitreason/create', {
+          method: 'POST',
+          body: checkInVisitReasons,
+        });
+      }
 
       this.setState({
         isCheckedIn: true,
@@ -276,11 +295,20 @@ class Kiosk extends Component {
   cancel = event => {
     event && event.preventDefault();
     this.setState({
+      password: '',
+      invalidPassword: false,
       page: CHECK_IN_PAGE,
-      error: null,
       reasons: [],
-      hasSigned: false,
-      is_employee: false,
+      selectedReasons: [],
+      isCheckedIn: false,
+      checkInID: null,
+      checkInTime: '',
+      checkOutTime: '',
+      waiverSigned: false,
+      isEmployee: false,
+      visitorId: '',
+      isLoading: false,
+      error: null,
     });
   };
 

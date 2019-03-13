@@ -18,7 +18,7 @@ class CompanySerializer(serializers.ModelSerializer):
 class CheckInsSerializer(serializers.ModelSerializer):
     class Meta:
         model = CheckIns
-        fields = ('visitor', 'check_in', 'check_out')
+        fields = ('id', 'visitor', 'check_in', 'check_out')
 
 class TimesheetSerializer(serializers.ModelSerializer):
     class Meta:
@@ -28,18 +28,18 @@ class TimesheetSerializer(serializers.ModelSerializer):
 class VisitorsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Visitors
-        fields = ('id', 'visitor_id', 'first_name',
+        fields = ('id', 'company', 'visitor_id', 'first_name',
         'last_name', 'is_employee', 'waiver_signed')
 
 class VisitReasonSerializer(serializers.ModelSerializer):
     class Meta:
         model = VisitReason
-        fields = ('id','company_id', 'description', 'is_active')
+        fields = ('id', 'company', 'description', 'is_active')
 
 class CheckInVisitReasonSerializer(serializers.ModelSerializer):
     class Meta:
         model = CheckInVisitReason
-        fields = ('CheckIn_id', 'visitor_reason_id')
+        fields = ('check_in', 'visit_reason')
 
 class UserSerializer(serializers.ModelSerializer):
     username = serializers.CharField(
