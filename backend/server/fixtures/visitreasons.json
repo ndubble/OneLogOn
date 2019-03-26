@@ -78,5 +78,13 @@
             "description": "Vinyl Cutter",
             "company_id": "2"
         }
+    },
+    {
+        "model": "server.visitreason",
+        "pk": 10,
+        "fields": {
+            "description": "Vinyl Cutter",
+            "company_id": "101"
+        }
     }
 ]
