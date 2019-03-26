@@ -21,6 +21,7 @@ class Register extends Component {
     company: '',
     error: null,
     isLoading: false,
+    key: null,
   };
 
   isValidUsername = input => {
@@ -62,7 +63,23 @@ class Register extends Component {
   handleSubmit = async event => {
     event.preventDefault();
     try {
-      this.setState({ isLoading: true, error: null });
+      this.setState({ isLoading: true, error: null, key: 'aaa' });
+
+      // get url to process the key
+      const url = window.location.href;
+
+      var regex = /[?&]([^=#]+)=([^&#]*)/g,
+        params = {},
+        match;
+      while ((match = regex.exec(url))) {
+        params[match[1]] = match[2];
+      }
+
+      //console.log(params);
+
+      // save the key
+      this.key = params['key'];
+      //console.log(this.key);
 
       await myFetch('/api/register', {
         method: 'POST',
@@ -70,6 +87,7 @@ class Register extends Component {
           username: this.state.username,
           company_name: this.state.company,
           email: this.state.email,
+          key: this.key,
           password: this.state.password,
         },
       });
@@ -114,6 +132,7 @@ class Register extends Component {
                 <FancyTextField
                   required
                   autoFocus
+                  autoComplete="username"
                   type="text"
                   placeholder="username"
                   name="username"
@@ -126,6 +145,7 @@ class Register extends Component {
               <Form.Group>
                 <FancyTextField
                   required
+                  autoComplete="organization"
                   type="text"
                   placeholder="company"
                   name="company"
@@ -138,6 +158,7 @@ class Register extends Component {
               <Form.Group>
                 <FancyTextField
                   required
+                  autoComplete="email"
                   type="email"
                   placeholder="email"
                   name="email"
@@ -150,6 +171,7 @@ class Register extends Component {
               <Form.Group>
                 <FancyTextField
                   required
+                  autoComplete="new-password"
                   type="password"
                   placeholder="password"
                   name="password"
